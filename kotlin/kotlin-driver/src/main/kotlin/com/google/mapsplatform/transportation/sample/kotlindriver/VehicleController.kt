@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 /** Controls vehicle related functionalities. */
 @Suppress("UnstableApiUsage")
 class VehicleController(
-  private val navigator: Navigator,
+  val navigator: Navigator,
   private val executor: ExecutorService,
   context: Context,
   private val coroutineScope: CoroutineScope,
