@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.adapter.guava.GuavaCallAdapterFactory
@@ -130,9 +132,19 @@ class LocalProviderService(
 
     /** Gets a Retrofit implementation of the Journey Sharing REST provider. */
     fun createRestProvider(baseUrl: String): RestProvider {
+
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .build()
+
       val retrofit =
         Retrofit.Builder()
           .baseUrl(baseUrl)
+          .client(okHttpClient)
           .addCallAdapterFactory(GuavaCallAdapterFactory.create())
           .addConverterFactory(GsonConverterFactory.create())
           .build()

@@ -33,7 +33,7 @@ project.ext {
     guavaVersion = "31.1-android"
     jodaTimeVersion = "2.10.10"
     retrofit2Version = "2.9.0"
-    okhttpVersion = "3.14.2"
+    okhttpVersion = "4.9.0"
     checkerVersion = "3.18.0"
     cardViewVersion = "1.0.0"
     truthVersion = "1.1.2"
@@ -69,6 +69,9 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        flatDir {
+            dirs("libs")
+        }
     }
 }
 

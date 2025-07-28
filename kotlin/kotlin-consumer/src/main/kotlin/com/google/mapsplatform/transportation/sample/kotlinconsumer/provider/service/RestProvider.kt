@@ -15,8 +15,10 @@
 package com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.service
 
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.CreateTripRequest
+import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.SearchTripsRequest
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.response.GetTripResponse
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.response.TokenResponse
+import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.response.SearchTripsResponse
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.response.TripResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -26,6 +28,8 @@ import retrofit2.http.Path
 /** Abstraction of expected REST endpoints implemented by a Provider. */
 interface RestProvider {
   @POST("trip/new") suspend fun createTrip(@Body createTripRequest: CreateTripRequest): TripResponse
+
+  @POST("trips/search") suspend fun searchTrips(@Body searchTripsRequest: SearchTripsRequest): SearchTripsResponse
 
   @GET("trip/{tripId}") suspend fun getTrip(@Path("tripId") tripId: String): GetTripResponse
 

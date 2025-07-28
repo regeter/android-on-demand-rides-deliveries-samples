@@ -345,6 +345,8 @@ public class ConsumerViewModel extends AndroidViewModel {
 
   /** Set the selected dropoff location. */
   public void setDropoffLocation(LatLng location) {
+    Log.i(TAG, "setDropoffLocation");
+    Log.i(TAG, location.toString());
     dropoffLocation.setValue(location);
   }
 
@@ -355,6 +357,8 @@ public class ConsumerViewModel extends AndroidViewModel {
 
   /** Set the selected pickup location. */
   public void setPickupLocation(LatLng location) {
+    Log.i(TAG, "setPickupLocation");
+    Log.i(TAG, location.toString());
     pickupLocation.setValue(location);
   }
 

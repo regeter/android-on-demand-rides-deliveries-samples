@@ -12,6 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+ //kotlin/com/google/mapsplatform/transportation/sample/kotlindriver/VehicleController.kt
 package com.google.mapsplatform.transportation.sample.kotlindriver
 
 import android.app.Application
@@ -52,7 +54,7 @@ import kotlinx.coroutines.launch
 /** Controls vehicle related functionalities. */
 @Suppress("UnstableApiUsage")
 class VehicleController(
-  private val navigator: Navigator,
+  val navigator: Navigator,
   private val executor: ExecutorService,
   context: Context,
   private val coroutineScope: CoroutineScope,
@@ -80,7 +82,6 @@ class VehicleController(
   private val tripStates: MutableMap<String, TripState> = mutableMapOf()
 
   fun onVehicleStateUpdate(vehicleModel: VehicleModel) {
-    Log.i(TAG, "onVehicleStateUpdate")
 
     waypoints = vehicleModel.waypoints
     matchedTripIds = vehicleModel.currentTripsIds
@@ -94,7 +95,7 @@ class VehicleController(
       var updatedNextWaypointOfCurrentTrip: Waypoint? = null
 
       waypoints.forEachIndexed { index, waypoint ->
-        Log.i(TAG, "$waypoint.tripId $waypoint.waypointType")
+//        Log.i(TAG, "$waypoint.tripId $waypoint.waypointType")
 
         val isTripForWaypointAccepted = tripStates.containsKey(waypoint.tripId)
 

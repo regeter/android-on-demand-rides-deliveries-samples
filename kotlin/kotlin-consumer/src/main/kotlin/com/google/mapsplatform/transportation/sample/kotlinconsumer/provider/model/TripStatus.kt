@@ -12,6 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+ 
+//kotlin/kotlin-consumer/src/main/kotlin/com/google/mapsplatform/transportation/sample/kotlinconsumer/provider/model/TripStatus.kt
 package com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model
 
 /** A basic state machine with FleetEngine Trip status. */

@@ -45,12 +45,14 @@ import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.Task;
 import com.google.android.libraries.mapsplatform.transportation.consumer.ConsumerApi;
 import com.google.android.libraries.mapsplatform.transportation.consumer.managers.TripModel;
 import com.google.android.libraries.mapsplatform.transportation.consumer.managers.TripModelManager;
+import com.google.android.libraries.mapsplatform.transportation.consumer.model.MarkerType;
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TerminalLocation;
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripInfo;
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripWaypoint;
@@ -58,6 +60,7 @@ import com.google.android.libraries.mapsplatform.transportation.consumer.session
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerController;
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerGoogleMap;
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerGoogleMap.ConsumerMapReadyCallback;
+import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerMapStyle;
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerMapView;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.mapsplatform.transportation.sample.consumer.provider.ProviderUtils;
@@ -101,6 +104,7 @@ public class SampleAppActivity extends AppCompatActivity
   private ConsumerMapView consumerMapView;
   // Multipurpose button depending on the app state (could be for selecting, drop-off, pickup, or
   // requesting trip)
+  private ConsumerMapStyle consumerMapStyle;
   private Button actionButton;
   // Button that adds a stop in between pickup/drop-off. Only visible when selecting drop-off.
   private Button addStopButton;

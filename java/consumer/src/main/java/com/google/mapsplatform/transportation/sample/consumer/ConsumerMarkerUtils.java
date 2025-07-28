@@ -23,6 +23,8 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+import android.graphics.Paint;
+import android.graphics.Color;
 import androidx.annotation.DrawableRes;
 import androidx.appcompat.content.res.AppCompatResources;
 import com.google.android.gms.maps.model.BitmapDescriptor;
@@ -67,6 +69,19 @@ public final class ConsumerMarkerUtils {
     }
   }
 
+  /** Returns marker options to display the vehicle marker in Picture-in-picture mode. */
+  public static MarkerOptions getShrunkVehicleMarkerOptions(Context context) {
+    Bitmap bitmap = getBitmapForMarker(context, R.drawable.ic_custom_trip_vehicle);
+
+    Bitmap scaledBitmap =
+            Bitmap.createScaledBitmap(
+                    bitmap, 80, 80, /* filter= */ false);
+
+    return new MarkerOptions()
+            .flat(false)
+            .icon(BitmapDescriptorFactory.fromBitmap(scaledBitmap));
+  }
+
   /** Convert a vector drawable to a bitmap descriptor. */
   public static BitmapDescriptor toBitmapDescriptor(Context context, @DrawableRes int resourceId) {
     Drawable vectorDrawable = AppCompatResources.getDrawable(context, resourceId);
@@ -99,4 +114,37 @@ public final class ConsumerMarkerUtils {
     mapStyle.setMarkerStyleOptions(
         MarkerType.TRIP_INTERMEDIATE_DESTINATION, intermediateMarkerStyleOptions);
   }
+
+  private static Bitmap getBitmapForMarker(Context context, int resId) {
+    Drawable vectorDrawable = AppCompatResources.getDrawable(context, resId);
+    Bitmap bitmap =
+            Bitmap.createBitmap(
+                    vectorDrawable.getIntrinsicWidth(),
+                    vectorDrawable.getIntrinsicHeight(),
+                    Bitmap.Config.ARGB_8888);
+    Canvas canvas = new Canvas(bitmap);
+    vectorDrawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+    vectorDrawable.draw(canvas);
+
+    return textAsBitmap("Test", 120,1);
+  }
+
+  public static Bitmap textAsBitmap(String text, float textSize, int textColor) {
+    Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    paint.setTextSize(textSize);
+    paint.setColor(Color.BLACK);
+    paint.setTextAlign(Paint.Align.LEFT);
+    float baseline = -paint.ascent(); // ascent() is negative
+    int width = (int) (paint.measureText(text) + 0.0f); // round
+    int height = (int) (baseline + paint.descent() + 0.0f);
+
+    int trueWidth = width;
+    if(width>height)height=width; else width=height;
+    Bitmap image = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+
+    Canvas canvas = new Canvas(image);
+    canvas.drawText(text, width/2-trueWidth/2, baseline, paint);
+    return image;
+  }
+
 }

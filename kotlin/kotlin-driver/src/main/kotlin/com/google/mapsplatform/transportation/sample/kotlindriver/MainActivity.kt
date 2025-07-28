@@ -17,10 +17,13 @@ package com.google.mapsplatform.transportation.sample.kotlindriver
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
@@ -59,6 +62,7 @@ class MainActivity : AppCompatActivity(), Presenter {
   private lateinit var actionButton: Button
   private lateinit var tripCard: CardView
   private lateinit var vehicleController: VehicleController
+  private lateinit var buttonContainer: LinearLayout
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -81,6 +85,8 @@ class MainActivity : AppCompatActivity(), Presenter {
     // Ensure the screen stays on during navigation.
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     initializeSDKs()
+    buttonContainer = findViewById(R.id.button_container)
+    addNavigationButtons()
     Log.i(TAG, "Driver SDK version: " + RidesharingDriverApi.getDriverSdkVersion())
     Log.i(TAG, "Navigation SDK version: " + NavigationApi.getNavSDKVersion())
   }
@@ -114,6 +120,53 @@ class MainActivity : AppCompatActivity(), Presenter {
       }
     )
   }
+
+  private fun addNavigationButtons() {
+    val buttonConfigs = listOf(
+      ButtonConfig("Show Route Overview") { navFragment.showRouteOverview() },
+      ButtonConfig("Start Guidance") { vehicleController.navigator.startGuidance() },
+      ButtonConfig("Stop Guidance") { vehicleController.navigator.stopGuidance() },
+      ButtonConfig("Clear Destinations") { vehicleController.navigator.clearDestinations() },
+      ButtonConfig("Enable Recenter") { navFragment.setRecenterButtonEnabled(true) },
+      ButtonConfig("Disable Recenter") { navFragment.setRecenterButtonEnabled(false) },
+      ButtonConfig("Follow Location") { followMyLocation(1) },
+      ButtonConfig("Unfollow Location") { followMyLocation(0) }
+    )
+
+    buttonConfigs.forEach { config ->
+      addButton(config)
+    }
+  }
+
+  private fun addButton(config: ButtonConfig) {
+    val button = Button(this, null, 0, R.style.SmallButton).apply {
+      text = config.text
+      setOnClickListener {
+        showToast(config.text)
+        config.action()
+      }
+      layoutParams = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.WRAP_CONTENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+      ).apply {
+        gravity = Gravity.END
+        setMargins(0, -8, 0, -8)
+      }
+    }
+
+    buttonContainer.addView(button)
+  }
+
+  private fun followMyLocation(mode: Int) {
+    navFragment.getMapAsync { googleMap ->
+      googleMap.followMyLocation(mode)
+    }
+  }
+
+  private fun showToast(message: String) {
+    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+  }
+
 
   private fun initVehicleAndPollTrip() {
     lifecycleScope.launch {
@@ -267,6 +320,8 @@ class MainActivity : AppCompatActivity(), Presenter {
     vehicleController.cleanUp()
     super.onDestroy()
   }
+
+  data class ButtonConfig(val text: String, val action: () -> Unit)
 
   companion object {
     private const val TAG = "MainActivity"
