@@ -12,15 +12,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+
 package com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.service
 
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripName
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.CreateTripRequest
+import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.SearchTripsRequest
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.TripData
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.TripStatus
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.response.GetTripResponse
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.adapter.guava.GuavaCallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
@@ -36,6 +41,9 @@ class LocalProviderService(
 ) {
   /** Creates a trip in the Provider based on the data given in request. */
   suspend fun createTrip(request: CreateTripRequest) = provider.createTrip(request)
+
+  /** Search trips in the Provider based on the data given in request. */
+  suspend fun searchTrips(request: SearchTripsRequest) = provider.searchTrips(request)
 
   /** Fetches an auth token for the given trip from the Provider. */
   suspend fun fetchAuthToken(tripId: String) = provider.getConsumerToken(tripId)
@@ -72,9 +80,18 @@ class LocalProviderService(
 
     /** Gets a Retrofit implementation of the Journey Sharing REST provider. */
     fun createRestProvider(baseUrl: String): RestProvider {
+      val loggingInterceptor = HttpLoggingInterceptor().apply {
+        level = HttpLoggingInterceptor.Level.BODY
+      }
+
+      val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(loggingInterceptor)
+        .build()
+
       val retrofit =
         Retrofit.Builder()
           .baseUrl(baseUrl)
+          .client(okHttpClient)
           .addCallAdapterFactory(GuavaCallAdapterFactory.create())
           .addConverterFactory(GsonConverterFactory.create())
           .build()

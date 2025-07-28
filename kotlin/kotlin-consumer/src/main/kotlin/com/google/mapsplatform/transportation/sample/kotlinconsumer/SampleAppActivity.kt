@@ -12,15 +12,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+ // kotlin/kotlin-consumer/src/main/kotlin/com/google/mapsplatform/transportation/sample/kotlinconsumer/SampleAppActivity.kt
 @file:Suppress("Deprecation")
 
 package com.google.mapsplatform.transportation.sample.kotlinconsumer
 
+import TripListAdapter
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.graphics.Color
 import android.location.Location
 import android.os.Bundle
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
 import android.widget.Switch
@@ -30,6 +35,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -42,7 +49,11 @@ import com.google.android.gms.tasks.Task
 import com.google.android.libraries.mapsplatform.transportation.consumer.ConsumerApi
 import com.google.android.libraries.mapsplatform.transportation.consumer.managers.TripModel
 import com.google.android.libraries.mapsplatform.transportation.consumer.managers.TripModelManager
+import com.google.android.libraries.mapsplatform.transportation.consumer.model.PolylineType
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TerminalLocation
+import com.google.android.libraries.mapsplatform.transportation.consumer.model.TrafficData.SpeedReadingInterval.SpeedType
+import com.google.android.libraries.mapsplatform.transportation.consumer.model.TrafficStyle
+import com.google.android.libraries.mapsplatform.transportation.consumer.model.Trip
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripInfo
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripWaypoint
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripWaypoint.WaypointType
@@ -50,11 +61,13 @@ import com.google.android.libraries.mapsplatform.transportation.consumer.session
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerController
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerGoogleMap
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerGoogleMap.ConsumerMapReadyCallback
+import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerMapStyle
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerMapView
 import com.google.android.material.snackbar.Snackbar
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.ProviderUtils
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.service.LocalProviderService
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.state.AppStates
+import kotlinx.coroutines.*
 import java.util.Date
 
 /** Main activity for the sample application. */
@@ -122,6 +135,29 @@ class SampleAppActivity : AppCompatActivity(), ConsumerViewModel.JourneySharingL
   // Session monitoring the current active trip.
   private var journeySharingSession: JourneySharingSession? = null
 
+  /** Contains utility methods that deal with polyline styling for a Consumer map. */
+  object PolylineStyles {
+    val orange = Color.rgb(255, 165, 0)
+    private val TRAFFIC_STYLE =
+      TrafficStyle.builder()
+        .setTrafficVisibility(true)
+        .setTrafficColor(SpeedType.NO_DATA, Color.GRAY)
+        .setTrafficColor(SpeedType.NORMAL, Color.BLUE)
+        .setTrafficColor(SpeedType.SLOW, orange)
+        .setTrafficColor(SpeedType.TRAFFIC_JAM, Color.RED)
+        .build()
+
+    /**
+     * Applies traffic styling for the ACTIVE_ROUTE polyline. This enables the 'Traffic Aware
+     * Polyline' feature.
+     *
+     * @param consumerController the map controller which provides access to the styles configurator.
+     */
+    fun enableTrafficAwarePolyline(consumerMapStyle: ConsumerMapStyle) {
+      consumerMapStyle.setPolylineTrafficStyle(PolylineType.ACTIVE_ROUTE, TRAFFIC_STYLE)
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.main)
@@ -183,6 +219,7 @@ class SampleAppActivity : AppCompatActivity(), ConsumerViewModel.JourneySharingL
           googleMap = consumerGoogleMap
           PolylineStyles.enableTrafficAwarePolyline(consumerController.getConsumerMapStyle())
           centerCameraToLastLocation()
+          consumerGoogleMap.isMyLocationEnabled = true
           setupMapListener()
         }
       },
@@ -394,12 +431,15 @@ class SampleAppActivity : AppCompatActivity(), ConsumerViewModel.JourneySharingL
 
   /** Display the reported map state and show trip data when in journey sharing state. */
   private fun displayAppState(state: Int) {
+    val existingTripButton = findViewById<Button>(R.id.existingTripButton)
+
     when (state) {
       AppStates.SELECTING_PICKUP -> {
         setTripStatusTitle(R.string.state_select_pickup)
         centerCameraToLastLocation()
         pickupPin.visibility = View.VISIBLE
         resetPickupMarkerAndLocation()
+        existingTripButton.visibility = View.GONE
       }
       AppStates.SELECTING_DROPOFF -> {
         setTripStatusTitle(R.string.state_select_dropoff)
@@ -414,6 +454,7 @@ class SampleAppActivity : AppCompatActivity(), ConsumerViewModel.JourneySharingL
         isSharedTripTypeSwitch.visibility = View.VISIBLE
       }
       AppStates.JOURNEY_SHARING -> {
+        existingTripButton.visibility = View.GONE
         clearTripPreviewPolyline()
         setTripStatusTitle(R.string.state_enroute_to_pickup)
       }
@@ -423,9 +464,13 @@ class SampleAppActivity : AppCompatActivity(), ConsumerViewModel.JourneySharingL
         removeAllMarkers()
         hideTripData()
       }
-      else -> hideTripData()
+      else -> {
+        hideTripData()
+        existingTripButton.visibility = View.VISIBLE
+      }
     }
   }
+
 
   /**
    * Callback method fired with the 'Add stop' button (+) has been pressed/touched. It grabs the
@@ -471,6 +516,9 @@ class SampleAppActivity : AppCompatActivity(), ConsumerViewModel.JourneySharingL
     actionButton.visibility = View.VISIBLE
     val roundedButton = actionButton.background
     DrawableCompat.setTint(roundedButton, ContextCompat.getColor(this, R.color.actionable))
+
+    val existingTripButton = findViewById<Button>(R.id.existingTripButton)
+    existingTripButton.visibility = View.VISIBLE
   }
 
   private fun hideTripData() {
@@ -652,8 +700,53 @@ class SampleAppActivity : AppCompatActivity(), ConsumerViewModel.JourneySharingL
       consumerViewModel.isSharedTripType = isChecked
     }
 
+    val existingTripButton = findViewById<Button>(R.id.existingTripButton)
+    existingTripButton.setOnClickListener {
+      Log.d(TAG, "Existing trip button clicked")
+      showTripSelectionDialog()
+    }
+
     resetActionButton()
   }
+
+  private fun showTripSelectionDialog() {
+    Log.d(TAG, "Showing trip selection dialog")
+
+    // This would be your API call to get trips
+    val trips = listOf("SHARED_TRIP_ID_A_regeter4", "SHARED_TRIP_ID_B_regeter4", "FIRST_TRIP_ID_regeter2", "SECOND_TRIP_ID_regeter2")
+
+    val dialogView = LayoutInflater.from(this).inflate(R.layout.trip_selection_dialog, null)
+    val recyclerView = dialogView.findViewById<RecyclerView>(R.id.tripListRecyclerView)
+    val tripSelectionDialog = AlertDialog.Builder(this)
+      .setTitle("Select a Trip")
+      .setView(dialogView)
+      .setNegativeButton("Cancel") { dialog, _ -> dialog.dismiss() }
+      .create()
+
+    recyclerView.layoutManager = LinearLayoutManager(this)
+    recyclerView.adapter = TripListAdapter(trips) { selectedTrip ->
+      Log.d(TAG, "Selected trip: $selectedTrip")
+      tripSelectionDialog.dismiss()
+
+      AlertDialog.Builder(this)
+        .setTitle("Confirm Trip")
+        .setMessage("Do you want to load trip: $selectedTrip?")
+        .setPositiveButton("OK") { _, _ ->
+          Log.d(TAG, "Trip confirmed: $selectedTrip")
+          consumerViewModel.loadTrip(selectedTrip)
+        }
+        .setNegativeButton("Cancel") { dialog, _ ->
+          dialog.dismiss()
+          showTripSelectionDialog()
+        }
+        .show()
+    }
+
+    tripSelectionDialog.show()
+  }
+
+
+
 
   private fun setupViewBindings() {
     // Start observing trip data.

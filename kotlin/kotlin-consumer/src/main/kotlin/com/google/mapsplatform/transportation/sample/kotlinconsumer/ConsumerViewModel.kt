@@ -12,6 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// kotlin/com/google/mapsplatform/transportation/sample/kotlinconsumer/ConsumerViewModel.kt
 @file:Suppress("Deprecation")
 
 package com.google.mapsplatform.transportation.sample.kotlinconsumer
@@ -29,8 +31,10 @@ import com.google.android.libraries.mapsplatform.transportation.consumer.model.T
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripWaypoint
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.VehicleLocation
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.CreateTripRequest
+import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.SearchTripsRequest
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.TripData
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.model.TripStatus
+import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.response.SearchTripsResponse
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.response.TripResponse
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.response.WaypointResponse
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.service.LocalProviderService
@@ -197,14 +201,53 @@ class ConsumerViewModel(
       }
     }
 
-  fun startJourneySharing(tripData: TripData) {
-    if (appState != AppStates.CONFIRMING_TRIP) {
-      Log.e(
-        TAG,
-        "App state should be `SELECTING_DROPOFF` but is $appState, journey sharing cannot be started.",
-      )
-      return
+  fun listTrips() =
+    viewModelScope.launch {
+      val searchTripsRequest = SearchTripsRequest()
+
+      try {
+        val searchResponse: SearchTripsResponse = providerService.searchTrips(searchTripsRequest)
+        for (trip in searchResponse.trips) {
+          if (trip.tripStatus !in listOf("COMPLETE", "CANCELED")) {
+            println(
+              """
+            name: ${trip.tripName}
+            vehicle_id: ${trip.vehicleId}
+            trip_status: ${trip.tripStatus}
+            """
+                .trimIndent()
+            )
+          }
+        }
+
+      } catch (e: Throwable) {
+        Log.e(TAG, "Failed to search trips.", e)
+        setErrorMessage(e)
+      }
     }
+
+  /** Loads an existing trip from the sample provider and starts journey sharing for it. */
+  fun loadTrip(tripName: String) =
+    viewModelScope.launch {
+      try {
+        Log.i(TAG, "Attempting to load trip $tripName")
+
+        val matchedTripResponse = providerService.fetchMatchedTrip(tripName)
+
+        Log.i(TAG, "Successfully loaded trip $tripName")
+
+        tripStatusLiveData.postValue(matchedTripResponse.tripStatus)
+
+        executeOnMainThread { startJourneySharing(matchedTripResponse) }
+      } catch (e: Throwable) {
+        Log.e(TAG, "Failed to load trip.", e)
+        setErrorMessage(e)
+      }
+    }
+
+
+
+  fun startJourneySharing(tripData: TripData) {
     val waypoints: List<WaypointResponse> = tripData.waypoints
     val listener = journeySharingListener.get()
     if (waypoints.size < 2 || listener == null) {
