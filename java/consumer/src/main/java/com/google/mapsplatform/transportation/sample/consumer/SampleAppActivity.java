@@ -23,21 +23,27 @@ import static com.google.mapsplatform.transportation.sample.consumer.state.AppSt
 import static java.util.Objects.requireNonNull;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.Switch;
 import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.drawable.DrawableCompat;
-import androidx.lifecycle.ViewModelProviders;
+import androidx.lifecycle.ViewModelProvider;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -62,8 +68,8 @@ import com.google.android.libraries.mapsplatform.transportation.consumer.view.Co
 import com.google.android.material.snackbar.Snackbar;
 import com.google.mapsplatform.transportation.sample.consumer.provider.ProviderUtils;
 import com.google.mapsplatform.transportation.sample.consumer.provider.model.TripData;
-import com.google.mapsplatform.transportation.sample.consumer.state.AppStates;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
@@ -102,6 +108,8 @@ public class SampleAppActivity extends AppCompatActivity
   // Multipurpose button depending on the app state (could be for selecting, drop-off, pickup, or
   // requesting trip)
   private Button actionButton;
+  // Secondary button that is either 'Existing Trip' or 'Cancel'.
+  private Button existingTripButton;
   // Button that adds a stop in between pickup/drop-off. Only visible when selecting drop-off.
   private Button addStopButton;
   // Dropoff pin in the center of the map.
@@ -119,10 +127,10 @@ public class SampleAppActivity extends AppCompatActivity
   // Marker representing the dropoff location.
   private Marker dropoffMarker = null;
   // Array of markers representing intermediate stops during trip preview.
-  private final ArrayList<Marker> intermediateStopsMarkers = new ArrayList<Marker>();
+  private final ArrayList<Marker> intermediateStopsMarkers = new ArrayList<>();
   // Array of markers representing waypoints from other trips that the driver is completing before
   // getting to the next current trip waypoint.
-  private final ArrayList<Marker> otherTripStopsMarkers = new ArrayList<Marker>();
+  private final ArrayList<Marker> otherTripStopsMarkers = new ArrayList<>();
 
   // ViewModel for the consumer sample app.
   private ConsumerViewModel consumerViewModel;
@@ -135,6 +143,11 @@ public class SampleAppActivity extends AppCompatActivity
   // Session monitoring the current active trip.
   @Nullable private JourneySharingSession journeySharingSession;
 
+  private CardView tripStatusCardView;
+  private View dividerView;
+  @Nullable private ColorStateList defaultCardBackgroundColor;
+  private float defaultCardElevation;
+
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -142,7 +155,7 @@ public class SampleAppActivity extends AppCompatActivity
     initViews();
 
     // Get the ViewModel.
-    consumerViewModel = ViewModelProviders.of(this).get(ConsumerViewModel.class);
+    consumerViewModel = new ViewModelProvider(this).get(ConsumerViewModel.class);
     consumerViewModel.setJourneySharingListener(this);
 
     initializeSdk();
@@ -185,6 +198,12 @@ public class SampleAppActivity extends AppCompatActivity
             googleMap = consumerGoogleMap;
             centerCameraToLastLocation();
             setupMapListener();
+            tripStatusCardView.post(
+                () -> {
+                  int padding = tripStatusCardView.getHeight() + dividerView.getHeight();
+                  Log.d(TAG, "Setting map bottom padding to: " + padding);
+                  consumerGoogleMap.setPadding(0, 0, 0, padding);
+                });
           }
         },
         /* fragmentActivity= */ this,
@@ -289,8 +308,10 @@ public class SampleAppActivity extends AppCompatActivity
    * is 'SELECTING_PICKUP', it updates the pickupMarker object.
    */
   private void updateMarkerBasedOnState(TerminalLocation location) {
-    @AppStates int state = consumerViewModel.getAppState().getValue();
-
+    Integer state = consumerViewModel.getAppState().getValue();
+    if (state == null) {
+      return;
+    }
     if (state == SELECTING_PICKUP) {
       if (pickupMarker == null) {
         pickupMarker =
@@ -321,7 +342,7 @@ public class SampleAppActivity extends AppCompatActivity
    * idle when selecting initial pickup. Select the current location as pickup initially.
    */
   private void resetPickupMarkerAndLocation() {
-    if (googleMap.getCameraPosition() == null) {
+    if (googleMap == null || googleMap.getCameraPosition() == null) {
       return;
     }
 
@@ -336,7 +357,7 @@ public class SampleAppActivity extends AppCompatActivity
    * idle when selecting initial pickup. Select the current location as pickup initially.
    */
   private void resetDropoffMarkerAndLocation() {
-    if (googleMap.getCameraPosition() == null) {
+    if (googleMap == null || googleMap.getCameraPosition() == null) {
       return;
     }
 
@@ -378,7 +399,8 @@ public class SampleAppActivity extends AppCompatActivity
     switch (status) {
       case TripInfo.TripStatus.NEW:
         if (consumerViewModel.isTripMatched()
-            && consumerViewModel.getTripInfo().getValue().getNextWaypoint() != null) {
+            && requireNonNull(consumerViewModel.getTripInfo().getValue()).getNextWaypoint()
+                != null) {
           setTripStatusTitle(R.string.state_enroute_to_pickup);
         } else {
           setTripStatusTitle(R.string.state_new);
@@ -422,10 +444,11 @@ public class SampleAppActivity extends AppCompatActivity
 
     for (TripWaypoint waypoint : otherTripWaypoints) {
       addedMarker =
-          googleMap.addMarker(
-              ConsumerMarkerUtils.getConsumerMarkerOptions(
-                      this, ConsumerMarkerType.PREVIOUS_TRIP_PENDING_POINT)
-                  .position(waypoint.getTerminalLocation().getLatLng()));
+          requireNonNull(googleMap)
+              .addMarker(
+                  ConsumerMarkerUtils.getConsumerMarkerOptions(
+                          this, ConsumerMarkerType.PREVIOUS_TRIP_PENDING_POINT)
+                      .position(waypoint.getTerminalLocation().getLatLng()));
 
       otherTripStopsMarkers.add(addedMarker);
     }
@@ -442,44 +465,86 @@ public class SampleAppActivity extends AppCompatActivity
 
   /** Display the reported map state and show trip data when in journey sharing state. */
   private void displayAppState(int state) {
+    if (state == INITIALIZED || state == UNINITIALIZED) {
+      Log.d(TAG, "displayAppState: Setting card to transparent for initial state: " + state);
+      tripStatusCardView.setCardBackgroundColor(Color.TRANSPARENT);
+      tripStatusCardView.setCardElevation(0f);
+    } else {
+      Log.d(TAG, "displayAppState: Setting card to default for state: " + state);
+      tripStatusCardView.setCardBackgroundColor(defaultCardBackgroundColor);
+      tripStatusCardView.setCardElevation(defaultCardElevation);
+    }
+
+    List<Integer> tripFlowStates = Arrays.asList(SELECTING_PICKUP, SELECTING_DROPOFF, CONFIRMING_TRIP);
+    if (tripFlowStates.contains(state)) {
+      Log.d(TAG, "Configuring Cancel button for state " + state);
+      existingTripButton.setText(R.string.button_cancel);
+      existingTripButton.setOnClickListener(v -> cancelTripFlow());
+    } else {
+      Log.d(TAG, "Configuring Existing Trip button for state " + state);
+      existingTripButton.setText(R.string.existing_trip_button_label);
+      existingTripButton.setOnClickListener(v -> showTripSelectionDialog());
+    }
+
     switch (state) {
       case SELECTING_PICKUP:
         setTripStatusTitle(R.string.state_select_pickup);
-        centerCameraToLastLocation();
+        actionButton.setText(R.string.pickup_label);
+        existingTripButton.setVisibility(View.VISIBLE);
         pickupPin.setVisibility(View.VISIBLE);
+        dropoffPin.setVisibility(View.GONE);
+        addStopButton.setVisibility(View.GONE);
+        isSharedTripTypeSwitch.setVisibility(View.GONE);
+        centerCameraToLastLocation();
         resetPickupMarkerAndLocation();
         break;
-
       case SELECTING_DROPOFF:
         setTripStatusTitle(R.string.state_select_dropoff);
+        actionButton.setText(R.string.dropoff_label);
+        existingTripButton.setVisibility(View.VISIBLE);
         pickupPin.setVisibility(View.INVISIBLE);
         dropoffPin.setVisibility(View.VISIBLE);
         addStopButton.setVisibility(View.VISIBLE);
+        isSharedTripTypeSwitch.setVisibility(View.GONE);
         break;
-
       case CONFIRMING_TRIP:
+        actionButton.setText(R.string.confirm_trip_label);
+        existingTripButton.setVisibility(View.VISIBLE);
         dropoffPin.setVisibility(View.INVISIBLE);
         tripStatusView.setVisibility(View.INVISIBLE);
         addStopButton.setVisibility(View.GONE);
         isSharedTripTypeSwitch.setVisibility(View.VISIBLE);
+        drawTripPreviewPolyline();
+        centerCameraForTripPreview();
         break;
-
       case JOURNEY_SHARING:
+        existingTripButton.setVisibility(View.GONE);
+        tripStatusView.setVisibility(View.VISIBLE);
+        pickupPin.setVisibility(View.GONE);
+        dropoffPin.setVisibility(View.GONE);
+        addStopButton.setVisibility(View.GONE);
+        isSharedTripTypeSwitch.setVisibility(View.GONE);
         clearTripPreviewPolyline();
         setTripStatusTitle(R.string.state_enroute_to_pickup);
         break;
-
+      case UNINITIALIZED:
       case INITIALIZED:
         tripStatusView.setVisibility(View.INVISIBLE);
-        resetActionButton();
+        pickupPin.setVisibility(View.GONE);
+        dropoffPin.setVisibility(View.GONE);
+        addStopButton.setVisibility(View.GONE);
+        isSharedTripTypeSwitch.setVisibility(View.GONE);
         removeAllMarkers();
+        clearTripPreviewPolyline();
         hideTripData();
-        break;
-
-      default:
-        hideTripData();
+        resetActionButton();
         break;
     }
+  }
+
+  private void cancelTripFlow() {
+    Log.d(TAG, "Trip flow cancelled by user.");
+    consumerViewModel.setState(INITIALIZED);
   }
 
   /**
@@ -536,6 +601,10 @@ public class SampleAppActivity extends AppCompatActivity
     actionButton.setVisibility(View.VISIBLE);
     Drawable roundedButton = actionButton.getBackground();
     DrawableCompat.setTint(roundedButton, ContextCompat.getColor(this, R.color.actionable));
+
+    existingTripButton.setVisibility(View.VISIBLE);
+    Drawable existingTripButtonBg = existingTripButton.getBackground();
+    DrawableCompat.setTint(existingTripButtonBg, Color.DKGRAY);
   }
 
   private void hideTripData() {
@@ -580,29 +649,23 @@ public class SampleAppActivity extends AppCompatActivity
   }
 
   private void onActionButtonTapped(View view) {
-    int currentState = consumerViewModel.getAppState().getValue();
+    Integer currentState = consumerViewModel.getAppState().getValue();
+    if (currentState == null) {
+      return;
+    }
     switch (currentState) {
       case INITIALIZED:
-        centerCameraToLastLocation();
-        // fall through
       case UNINITIALIZED:
-        actionButton.setText(R.string.pickup_label);
         consumerViewModel.setState(SELECTING_PICKUP);
         break;
       case SELECTING_PICKUP:
-        actionButton.setText(R.string.dropoff_label);
         consumerViewModel.setState(SELECTING_DROPOFF);
         break;
       case SELECTING_DROPOFF:
-        actionButton.setText(R.string.confirm_trip_label);
         consumerViewModel.setState(CONFIRMING_TRIP);
-        drawTripPreviewPolyline();
-        centerCameraForTripPreview();
         break;
       case CONFIRMING_TRIP:
         consumerViewModel.createTrip();
-        break;
-      default:
         break;
     }
   }
@@ -650,8 +713,8 @@ public class SampleAppActivity extends AppCompatActivity
 
   private void displayOtherTripMarkers(List<TripWaypoint> waypoints) {
     clearJourneySharingStateMarkers();
-
-    if (consumerViewModel.getAppState().getValue() == JOURNEY_SHARING) {
+    Integer state = consumerViewModel.getAppState().getValue();
+    if (state != null && state == JOURNEY_SHARING) {
       drawJourneySharingStateMarkers(waypoints);
     }
   }
@@ -682,7 +745,7 @@ public class SampleAppActivity extends AppCompatActivity
 
     polylineOptions.add(dropoffLocation);
 
-    tripPreviewPolyline = googleMap.addPolyline(polylineOptions);
+    tripPreviewPolyline = requireNonNull(googleMap).addPolyline(polylineOptions);
   }
 
   /** Centers the camera within the bounds of the trip preview polyline. */
@@ -715,6 +778,7 @@ public class SampleAppActivity extends AppCompatActivity
   private void clearTripPreviewPolyline() {
     if (tripPreviewPolyline != null) {
       tripPreviewPolyline.remove();
+      tripPreviewPolyline = null;
     }
   }
 
@@ -732,6 +796,12 @@ public class SampleAppActivity extends AppCompatActivity
     actionButton.setOnClickListener(this::onActionButtonTapped);
     addStopButton = findViewById(R.id.addStopButton);
     addStopButton.setOnClickListener(this::onAddStopButtonTapped);
+    existingTripButton = findViewById(R.id.existingTripButton);
+    tripStatusCardView = findViewById(R.id.trip_status_cardView);
+    dividerView = findViewById(R.id.divider);
+
+    defaultCardBackgroundColor = tripStatusCardView.getCardBackgroundColor();
+    defaultCardElevation = tripStatusCardView.getCardElevation();
 
     isSharedTripTypeSwitch = findViewById(R.id.is_shared_trip_type_switch);
     isSharedTripTypeSwitch.setOnCheckedChangeListener(
@@ -740,33 +810,57 @@ public class SampleAppActivity extends AppCompatActivity
     resetActionButton();
   }
 
+  private void showTripSelectionDialog() {
+    Log.d(TAG, "Showing trip selection dialog");
+    FrameLayout container = new FrameLayout(this);
+    FrameLayout.LayoutParams params =
+            new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    int margin = (int) (20 * getResources().getDisplayMetrics().density);
+    params.leftMargin = margin;
+    params.rightMargin = margin;
+
+    final EditText tripIdInput = new EditText(this);
+    tripIdInput.setLayoutParams(params);
+    tripIdInput.setHint("Enter Trip ID");
+    container.addView(tripIdInput);
+
+    new AlertDialog.Builder(this)
+            .setTitle("Connect to Existing Trip")
+            .setView(container)
+            .setPositiveButton(
+                    "Connect",
+                    (dialog, which) -> {
+                      String tripId = tripIdInput.getText().toString().trim();
+                      if (!tripId.isEmpty()) {
+                        Log.i(TAG, "User connecting to trip ID: " + tripId);
+                        consumerViewModel.loadTrip(tripId);
+                      } else {
+                        Log.w(TAG, "User tried to connect with an empty trip ID.");
+                        Snackbar.make(tripStatusView, "Trip ID cannot be empty.", Snackbar.LENGTH_SHORT)
+                                .show();
+                      }
+                    })
+            .setNegativeButton(
+                    "Cancel",
+                    (dialog, which) -> {
+                      Log.d(TAG, "Connect to trip cancelled.");
+                      dialog.dismiss();
+                    })
+            .show();
+  }
+
   private void setupViewBindings() {
     // Start observing trip data.
-    consumerViewModel
-        .getTripStatus()
-        .observe(SampleAppActivity.this, SampleAppActivity.this::displayTripStatus);
-    consumerViewModel
-        .getAppState()
-        .observe(SampleAppActivity.this, SampleAppActivity.this::displayAppState);
-    consumerViewModel
-        .getTripId()
-        .observe(SampleAppActivity.this, SampleAppActivity.this::displayTripId);
-    consumerViewModel
-        .getTripInfo()
-        .observe(SampleAppActivity.this, SampleAppActivity.this::displayTripInfo);
-    consumerViewModel
-        .getNextWaypointEta()
-        .observe(SampleAppActivity.this, SampleAppActivity.this::displayEta);
-    consumerViewModel
-        .getRemainingDistanceMeters()
-        .observe(SampleAppActivity.this, SampleAppActivity.this::displayRemainingDistance);
-    consumerViewModel
-        .getErrorMessage()
-        .observe(SampleAppActivity.this, SampleAppActivity.this::displayErrorMessage);
+    consumerViewModel.getTripStatus().observe(this, this::displayTripStatus);
+    consumerViewModel.getAppState().observe(this, this::displayAppState);
+    consumerViewModel.getTripId().observe(this, this::displayTripId);
+    consumerViewModel.getTripInfo().observe(this, this::displayTripInfo);
+    consumerViewModel.getNextWaypointEta().observe(this, this::displayEta);
+    consumerViewModel.getRemainingDistanceMeters().observe(this, this::displayRemainingDistance);
+    consumerViewModel.getErrorMessage().observe(this, this::displayErrorMessage);
 
-    consumerViewModel
-        .getOtherTripWaypoints()
-        .observe(SampleAppActivity.this, SampleAppActivity.this::displayOtherTripMarkers);
+    consumerViewModel.getOtherTripWaypoints().observe(this, this::displayOtherTripMarkers);
   }
 
   @Override

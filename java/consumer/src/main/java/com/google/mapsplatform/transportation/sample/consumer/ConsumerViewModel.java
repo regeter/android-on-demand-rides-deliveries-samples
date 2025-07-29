@@ -159,6 +159,29 @@ public class ConsumerViewModel extends AndroidViewModel {
     handleCreateTripResponse(tripResponseFuture);
   }
 
+  /** Fetches an existing trip from the provider and starts journey sharing. */
+  public void loadTrip(String tripName) {
+    Log.i(TAG, "Attempting to load trip " + tripName);
+    ListenableFuture<TripData> tripDataFuture = providerService.getTrip(tripName);
+
+    Futures.addCallback(
+        tripDataFuture,
+        new FutureCallback<TripData>() {
+          @Override
+          public void onSuccess(TripData tripData) {
+            Log.i(TAG, "Successfully loaded trip " + tripName);
+            mainExecutor.execute(() -> startJourneySharing(tripData));
+          }
+
+          @Override
+          public void onFailure(Throwable e) {
+            Log.e(TAG, "Failed to load trip " + tripName, e);
+            setErrorMessage(e);
+          }
+        },
+        executor);
+  }
+
   private void handleCreateTripResponse(ListenableFuture<TripResponse> tripResponseFuture) {
     Futures.addCallback(
         tripResponseFuture,
@@ -201,15 +224,6 @@ public class ConsumerViewModel extends AndroidViewModel {
   }
 
   public void startJourneySharing(TripData tripData) {
-    if (appState.getValue() != AppStates.CONFIRMING_TRIP) {
-      Log.e(
-          TAG,
-          String.format(
-              "App state should be `SELECTING_DROPOFF` but is %d, journey sharing cannot be"
-                  + " started.",
-              appState.getValue()));
-      return;
-    }
     List<WaypointResponse> waypoints = tripData.waypoints();
     JourneySharingListener listener = journeySharingListener.get();
 
@@ -289,7 +303,8 @@ public class ConsumerViewModel extends AndroidViewModel {
 
   /** Determines if the driver is currently working on another trip's waypoint. */
   public boolean isDriverInOtherTripWaypoint() {
-    return !getOtherTripWaypoints().getValue().isEmpty();
+    ImmutableList<TripWaypoint> waypoints = getOtherTripWaypoints().getValue();
+    return waypoints != null && !waypoints.isEmpty();
   }
 
   /** Gets the current waypoint type when driver is currently working on another trip. */
@@ -330,7 +345,10 @@ public class ConsumerViewModel extends AndroidViewModel {
 
   /** Updates the location container (pickup or dropoff) given by the current app state. */
   public void updateLocationPointForState(LatLng cameraLocation) {
-    @AppStates int state = this.appState.getValue();
+    Integer state = this.appState.getValue();
+    if (state == null) {
+      return;
+    }
 
     if (state != AppStates.SELECTING_PICKUP && state != AppStates.SELECTING_DROPOFF) {
       return;
@@ -396,7 +414,11 @@ public class ConsumerViewModel extends AndroidViewModel {
 
   private void setErrorMessage(Throwable e) {
     if (e instanceof ConnectException) {
+      Log.w(TAG, "Provider connection error.", e);
       mainExecutor.execute(() -> errorMessage.setValue(R.string.msg_provider_connection_error));
+    } else {
+      Log.e(TAG, "A generic error occurred in the provider.", e);
+      mainExecutor.execute(() -> errorMessage.setValue(R.string.error_trip_not_found));
     }
   }
 
@@ -454,7 +476,8 @@ public class ConsumerViewModel extends AndroidViewModel {
 
   private void maybeUpdateCurrentLocation(@Nullable VehicleLocation vehicleLocation) {
     JourneySharingListener listener = journeySharingListener.get();
-    if (appState.getValue() == AppStates.JOURNEY_SHARING
+    if (appState.getValue() != null
+        && appState.getValue() == AppStates.JOURNEY_SHARING
         && listener != null
         && vehicleLocation != null) {
       listener.updateCurrentLocation(vehicleLocation.getLatLng());

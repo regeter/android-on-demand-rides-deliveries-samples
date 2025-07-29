@@ -12,6 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+//  java/consumer/src/main/java/com/google/mapsplatform/transportation/sample/consumer/provider/service/LocalProviderService.java
 package com.google.mapsplatform.transportation.sample.consumer.provider.service;
 
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripName;
@@ -59,6 +61,24 @@ public class LocalProviderService {
 
   public ListenableFuture<TokenResponse> fetchAuthToken(String tripId) {
     return provider.getConsumerToken(tripId);
+  }
+
+  public ListenableFuture<TripData> getTrip(String tripName) {
+    String tripId = TripName.create(tripName).getTripId();
+    ListenableFuture<GetTripResponse> getTripResponseFuture = provider.getTrip(tripId);
+    return Futures.transform(
+        getTripResponseFuture,
+        getTripResponse -> {
+          TripResponse trip = getTripResponse.getTrip();
+          return TripData.newBuilder()
+              .setTripId(tripId)
+              .setTripName(trip.getTripName())
+              .setVehicleId(trip.getVehicleId())
+              .setTripStatus(TripStatus.parse(trip.getTripStatus()))
+              .setWaypoints(Lists.newArrayList(trip.getWaypoints()))
+              .build();
+        },
+        executor);
   }
 
   public ListenableFuture<TripData> fetchMatchedTrip(String tripName) {
