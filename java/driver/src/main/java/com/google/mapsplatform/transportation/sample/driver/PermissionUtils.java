@@ -29,7 +29,6 @@ public final class PermissionUtils {
   private static final String[] REQUIRED_PERMISSIONS =
       new String[] {
         permission.ACCESS_FINE_LOCATION,
-        permission.WRITE_EXTERNAL_STORAGE,
         permission.READ_PHONE_STATE,
       };
 
@@ -40,7 +39,6 @@ public final class PermissionUtils {
   private static final String[] REQUIRED_PERMISSIONS_OS_12PLUS =
       new String[] {
         permission.ACCESS_FINE_LOCATION,
-        permission.WRITE_EXTERNAL_STORAGE,
         permission.READ_PHONE_STATE,
         permission.BLUETOOTH_CONNECT
       };
