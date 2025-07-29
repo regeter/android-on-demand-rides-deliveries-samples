@@ -197,6 +197,7 @@ public class SampleAppActivity extends AppCompatActivity
             setupViewBindings();
             googleMap = consumerGoogleMap;
             centerCameraToLastLocation();
+            consumerGoogleMap.setMyLocationEnabled(true);
             setupMapListener();
             tripStatusCardView.post(
                 () -> {
