@@ -38,9 +38,18 @@ import retrofit2.converter.gson.GsonConverterFactory
 class LocalProviderService(
   private val restProvider: RestProvider,
 ) {
-  /** Fetch JWT token from provider. */
-  suspend fun fetchAuthToken(vehicleId: String): TokenResponse =
-    restProvider.getAuthToken(vehicleId)
+  /**
+   * Fetch JWT token from provider.
+   * Returns null if the network request fails.
+   */
+  suspend fun fetchAuthToken(vehicleId: String): TokenResponse? {
+    return try {
+      restProvider.getAuthToken(vehicleId)
+    } catch (e: Exception) {
+      Log.e(TAG, "Auth token fetch failed for vehicle $vehicleId", e)
+      null
+    }
+  }
 
   /**
    * Updates the trip status/intermediateDestinationIndex on a remote provider.
@@ -48,39 +57,50 @@ class LocalProviderService(
    * @param tripState current state of the trip to update. Contains tripId, status, and intermediate
    * destination index. If the current trip status is ENROUTE_TO_INTERMEDIATE_DESTINATION, it will
    * include the intermediate destination index in the request.
-   * @return the updated trip model from the provider.
+   * @return the updated trip model from the provider, or null on failure.
    */
-  suspend fun updateTripStatus(tripState: TripState): TripModel {
-    val (tripId, tripStatus, intermediateDestinationIndex) = tripState
-    val tripStatusString = tripStatus.toString()
+  suspend fun updateTripStatus(tripState: TripState): TripModel? {
+    return try {
+      val (tripId, tripStatus, intermediateDestinationIndex) = tripState
+      val tripStatusString = tripStatus.toString()
 
-    return if (tripStatus == TripStatus.ENROUTE_TO_INTERMEDIATE_DESTINATION) {
-      updateTrip(tripId, TripUpdateBody(tripStatusString, intermediateDestinationIndex))
-    } else {
-      updateTrip(tripId, TripUpdateBody(tripStatusString))
+      if (tripStatus == TripStatus.ENROUTE_TO_INTERMEDIATE_DESTINATION) {
+        updateTrip(tripId, TripUpdateBody(tripStatusString, intermediateDestinationIndex))
+      } else {
+        updateTrip(tripId, TripUpdateBody(tripStatusString))
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Update trip status failed for trip ${tripState.tripId}", e)
+      null
     }
   }
 
   /**
-   * Registers a vehicle on Journey Sharing provider using an asynchronous task. If the registration
-   * is successful, the view model is updated with the vehicle name.
+   * Registers a vehicle on Journey Sharing provider. If the vehicle does not exist,
+   * it creates one.
    *
    * @param vehicleId vehicle id to be registered.
-   * @return retrieved vehicle model.
+   * @return retrieved vehicle model, or null on failure.
    */
-  suspend fun registerVehicle(vehicleId: String): VehicleModel {
+  suspend fun registerVehicle(vehicleId: String): VehicleModel? {
     return try {
       restProvider.getVehicle(vehicleId)
     } catch (httpException: HttpException) {
       if (isNotFoundHttpException(httpException)) {
-        restProvider.createVehicle(
-          VehicleSettings(
-            vehicleId = vehicleId,
-          )
-        )
+        // Vehicle not found, so create it.
+        try {
+          restProvider.createVehicle(VehicleSettings(vehicleId = vehicleId))
+        } catch (e: Exception) {
+          Log.e(TAG, "Failed to create vehicle $vehicleId after not finding it.", e)
+          null
+        }
       } else {
-        throw httpException
+        Log.e(TAG, "HTTP error while registering vehicle $vehicleId", httpException)
+        null
       }
+    } catch (e: Exception) {
+      Log.e(TAG, "Generic error while registering vehicle $vehicleId", e)
+      null
     }
   }
 
@@ -88,22 +108,33 @@ class LocalProviderService(
    * Creates or updates a 'Vehicle' in the sample provider based on the given settings.
    *
    * @param vehicleSettings the settings to use while creating/updating the vehicle.
-   * @return created/updated vehicle model.
+   * @return created/updated vehicle model, or null on failure.
    */
-  suspend fun createOrUpdateVehicle(vehicleSettings: VehicleSettings): VehicleModel {
+  suspend fun createOrUpdateVehicle(vehicleSettings: VehicleSettings): VehicleModel? {
     return try {
       restProvider.updateVehicle(vehicleSettings.vehicleId, vehicleSettings)
     } catch (httpException: HttpException) {
       if (isNotFoundHttpException(httpException)) {
-        restProvider.createVehicle(vehicleSettings)
+        // Vehicle not found, so create it instead of updating.
+        try {
+          restProvider.createVehicle(vehicleSettings)
+        } catch (e: Exception) {
+          Log.e(TAG, "Failed to create vehicle ${vehicleSettings.vehicleId} during update.", e)
+          null
+        }
       } else {
-        throw httpException
+        Log.e(TAG, "HTTP error while updating vehicle ${vehicleSettings.vehicleId}", httpException)
+        null
       }
+    } catch (e: Exception) {
+      Log.e(TAG, "Generic error while updating vehicle ${vehicleSettings.vehicleId}", e)
+      null
     }
   }
 
   /**
-   * Gets a flow that can be used to fetch the state of a vehicle model from the remove provider.
+   * Gets a flow that polls for the state of a vehicle model from the remote provider.
+   * This flow is resilient to network errors; it will log them and continue polling.
    *
    * @param vehicleId the id of the vehicle to retrieve
    * @return cold flow that can be used to fetch a vehicle model.
@@ -111,12 +142,23 @@ class LocalProviderService(
   fun getVehicleModelFlow(vehicleId: String): Flow<VehicleModel> =
     flow {
         while (true) {
-          emit(restProvider.getVehicle(vehicleId))
+          try {
+            val vehicle = restProvider.getVehicle(vehicleId)
+            emit(vehicle)
+          } catch (e: Exception) {
+            Log.w(TAG, "Polling for vehicle $vehicleId failed. Retrying in 3 seconds.", e)
+          }
           delay(3.seconds)
         }
       }
-      .onStart({ Log.i(TAG, "Starting polling for $vehicleId") })
-      .onCompletion({ Log.i(TAG, "Ending polling for $vehicleId") })
+      .onStart { Log.i(TAG, "Starting polling for $vehicleId") }
+      .onCompletion { cause ->
+        if (cause != null) {
+          Log.w(TAG, "Polling for $vehicleId ended due to an unrecoverable error or scope cancellation.", cause)
+        } else {
+          Log.i(TAG, "Ending polling for $vehicleId.")
+        }
+      }
 
   private suspend fun updateTrip(tripId: String, updateBody: TripUpdateBody): TripModel =
     restProvider.updateTrip(tripId, updateBody).also {

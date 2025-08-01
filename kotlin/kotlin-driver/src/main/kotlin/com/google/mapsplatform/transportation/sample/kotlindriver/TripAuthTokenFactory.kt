@@ -14,6 +14,7 @@
  */
 package com.google.mapsplatform.transportation.sample.kotlindriver
 
+import android.util.Log
 import com.google.android.libraries.mapsplatform.transportation.driver.api.base.data.AuthTokenContext
 import com.google.mapsplatform.transportation.sample.kotlindriver.provider.service.LocalProviderService
 import kotlinx.coroutines.runBlocking
@@ -25,25 +26,37 @@ internal class TripAuthTokenFactory(private val providerService: LocalProviderSe
   private var vehicleId: String? = null
 
   override fun getToken(context: AuthTokenContext): String {
-    val vehicleId = context.vehicleId!!
-    if (System.currentTimeMillis() > expiryTimeMs || vehicleId != this.vehicleId) {
-      fetchNewToken(vehicleId)
+    val currentVehicleId = context.vehicleId
+    if (
+      token == null || System.currentTimeMillis() > expiryTimeMs || currentVehicleId != this.vehicleId
+    ) {
+      currentVehicleId?.let {
+        fetchNewToken(it)
+      }
     }
-    return token!!
+    // Return the token, or an empty string if fetching failed.
+    return token ?: ""
   }
 
   private fun fetchNewToken(vehicleId: String) = runBlocking {
-    try {
-      val tokenResponse = providerService.fetchAuthToken(vehicleId)
-      token = tokenResponse.token!!
+    // Call our updated service function which can return null
+    providerService.fetchAuthToken(vehicleId)?.let { tokenResponse ->
+      // This block only executes if the response is NOT null
+      token = tokenResponse.token
 
       // The expiry time could be an hour from now, but just to try and avoid
       // passing expired tokens, we subtract 10 minutes from that time.
       val tenMinutesInMillis = (10 * 60 * 1000).toLong()
       expiryTimeMs = tokenResponse.expirationTimestamp.millis - tenMinutesInMillis
       this@TripAuthTokenFactory.vehicleId = vehicleId
-    } catch (e: Exception) {
-      throw RuntimeException("Could not get auth token", e)
     }
+      ?: run {
+        // This block executes if the response IS null (i.e., network failed)
+        Log.e(
+          "TripAuthTokenFactory",
+          "Could not get auth token for $vehicleId. Setting token to null."
+        )
+        token = null // Invalidate the current token
+      }
   }
 }

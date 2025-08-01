@@ -141,9 +141,13 @@ class VehicleController(
    * @param application Application instance.
    */
   suspend fun initVehicleAndReporter(application: Application) {
-    val vehicleModel = providerService.registerVehicle(localSettings.getVehicleId())
-
-    initializeApi(application, vehicleModel)
+    providerService.registerVehicle(localSettings.getVehicleId())?.let { vehicleModel ->
+      initializeApi(application, vehicleModel)
+    }
+      ?: Log.e(
+        TAG,
+        "initVehicleAndReporter: Failed to register vehicle. API not initialized."
+      )
   }
 
   /**
@@ -154,10 +158,18 @@ class VehicleController(
    * @param vehicleSettings the updated vehicle settings.
    */
   suspend fun updateVehicleSettings(application: Application, vehicleSettings: VehicleSettings) {
-    val vehicleModel = providerService.createOrUpdateVehicle(vehicleSettings)
-    localSettings.saveVehicleId(extractVehicleId(vehicleModel.name))
-
-    initializeApi(application, vehicleModel)
+    providerService.createOrUpdateVehicle(vehicleSettings)?.let { vehicleModel ->
+      // The local settings vehicleId must match the registered vehicle name.
+      extractVehicleId(vehicleModel.name)?.let {
+        localSettings.saveVehicleId(it)
+        initializeApi(application, vehicleModel)
+      }
+        ?: Log.e(TAG, "updateVehicleSettings: Could not extract vehicle ID from response.")
+    }
+      ?: Log.e(
+        TAG,
+        "updateVehicleSettings: Failed to create/update vehicle. API not initialized."
+      )
   }
 
   /**
@@ -171,6 +183,12 @@ class VehicleController(
     // to get a fresh one for the new vehicle.
     if (RidesharingDriverApi.getInstance() != null) {
       RidesharingDriverApi.clearInstance()
+    }
+
+    val extractedVehicleId = extractVehicleId(vehicleModel.name)
+    if (extractedVehicleId == null) {
+      Log.e(TAG, "initializeApi: Vehicle name from server is invalid: ${vehicleModel.name}")
+      return
     }
 
     vehicleReporter =
@@ -189,14 +207,12 @@ class VehicleController(
         .ridesharingVehicleReporter
 
     vehicleSettings =
-      vehicleModel.let {
-        VehicleSettings(
-          vehicleId = extractVehicleId(it.name)!!,
-          backToBackEnabled = it.backToBackEnabled,
-          supportedTripTypes = it.supportedTripTypes,
-          maximumCapacity = it.maximumCapacity,
-        )
-      }
+      VehicleSettings(
+        vehicleId = extractedVehicleId,
+        backToBackEnabled = vehicleModel.backToBackEnabled,
+        supportedTripTypes = vehicleModel.supportedTripTypes,
+        maximumCapacity = vehicleModel.maximumCapacity,
+      )
 
     setVehicleOnline()
     startVehiclePeriodicUpdate()
