@@ -25,7 +25,6 @@ import android.graphics.Color
 import android.location.Location
 import android.os.Bundle
 import android.util.Log
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -39,8 +38,6 @@ import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.lifecycle.ViewModelProvider
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -53,11 +50,7 @@ import com.google.android.gms.tasks.Task
 import com.google.android.libraries.mapsplatform.transportation.consumer.ConsumerApi
 import com.google.android.libraries.mapsplatform.transportation.consumer.managers.TripModel
 import com.google.android.libraries.mapsplatform.transportation.consumer.managers.TripModelManager
-import com.google.android.libraries.mapsplatform.transportation.consumer.model.PolylineType
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TerminalLocation
-import com.google.android.libraries.mapsplatform.transportation.consumer.model.TrafficData.SpeedReadingInterval.SpeedType
-import com.google.android.libraries.mapsplatform.transportation.consumer.model.TrafficStyle
-import com.google.android.libraries.mapsplatform.transportation.consumer.model.Trip
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripInfo
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripWaypoint
 import com.google.android.libraries.mapsplatform.transportation.consumer.model.TripWaypoint.WaypointType
@@ -65,15 +58,13 @@ import com.google.android.libraries.mapsplatform.transportation.consumer.session
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerController
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerGoogleMap
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerGoogleMap.ConsumerMapReadyCallback
-import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerMapStyle
 import com.google.android.libraries.mapsplatform.transportation.consumer.view.ConsumerMapView
 import com.google.android.material.snackbar.Snackbar
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.ProviderUtils
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.provider.service.LocalProviderService
 import com.google.mapsplatform.transportation.sample.kotlinconsumer.state.AppStates
-import kotlinx.coroutines.*
 import java.util.Date
-
+import kotlinx.coroutines.*
 /** Main activity for the sample application. */
 class SampleAppActivity : AppCompatActivity(), ConsumerViewModel.JourneySharingListener {
   // The current journey sharing trip status.
@@ -143,29 +134,6 @@ class SampleAppActivity : AppCompatActivity(), ConsumerViewModel.JourneySharingL
   private lateinit var tripStatusCardView: CardView
   private var defaultCardBackgroundColor: ColorStateList? = null
   private var defaultCardElevation: Float = 0f
-
-  /** Contains utility methods that deal with polyline styling for a Consumer map. */
-  object PolylineStyles {
-    val orange = Color.rgb(255, 165, 0)
-    private val TRAFFIC_STYLE =
-      TrafficStyle.builder()
-        .setTrafficVisibility(true)
-        .setTrafficColor(SpeedType.NO_DATA, Color.GRAY)
-        .setTrafficColor(SpeedType.NORMAL, Color.BLUE)
-        .setTrafficColor(SpeedType.SLOW, orange)
-        .setTrafficColor(SpeedType.TRAFFIC_JAM, Color.RED)
-        .build()
-
-    /**
-     * Applies traffic styling for the ACTIVE_ROUTE polyline. This enables the 'Traffic Aware
-     * Polyline' feature.
-     *
-     * @param consumerController the map controller which provides access to the styles configurator.
-     */
-    fun enableTrafficAwarePolyline(consumerMapStyle: ConsumerMapStyle) {
-      consumerMapStyle.setPolylineTrafficStyle(PolylineType.ACTIVE_ROUTE, TRAFFIC_STYLE)
-    }
-  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
